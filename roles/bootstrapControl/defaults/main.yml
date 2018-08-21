@@ -1,0 +1,7 @@
+---
+#This value needs to be kept updated for the role to work
+tower_version: 3.2.6
+install_dir: /home/ec2-user
+
+#This value is derived from the above two values
+tower_install_dir: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}"

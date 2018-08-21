@@ -1,0 +1,8 @@
+---
+vpc_subnet_id: subnet-0e077743cb17845ad
+key_pair: tower_rds
+
+#Right now these must be predefined in AWS
+control_security_group: control-rds
+tower_security_group: tower-rds
+rds_security_group: rds-rds

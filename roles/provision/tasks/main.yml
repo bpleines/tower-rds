@@ -1,0 +1,129 @@
+---
+- name: Create key pair using key_material obtained using 'file' lookup plugin
+  ec2_key:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}" 
+    aws_secret_key: "{{ aws_secret_key }}"
+    #key info 
+    name: tower_rds
+    key_material: "{{ lookup('file', '~/.ssh/tower_rds.pub') }}"
+    region: "{{ region }}"
+  register: key
+
+- name: Create the Linux Control Node
+  ec2:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+    #key pair used in group_vars/all/main.yml
+    key_name: "{{ key_pair }}"
+    #image properties
+    id: controlzaaa
+    instance_type: t2.small
+    image: "{{ rhel_marketplace }}"
+    wait: yes
+    group: "{{ control_security_group }}"
+    count: 1
+    region: "{{ region }}"
+    assign_public_ip: yes
+    #Must be defined when using assign_public_ip
+    vpc_subnet_id: "{{ vpc_subnet_id }}"
+    #Explicitly define state
+    state: present
+    #user_data: |
+    #  #!/bin/bash
+    #  echo "{{ lookup('file', '~/.ssh/tower_rds.pub') }}" >/home/ec2-user/.ssh/authorized_keys
+    #  echo "{{ lookup('file', '~/.ssh/tower_rds.pub') }}" >/root/.ssh/authorized_keys
+  register: tower_control_launched
+  tags: control
+
+- name: Add the control node to an in-memory inventory group
+  add_host:  
+    name: "{{ item.public_dns_name }}" 
+    groups: control
+  with_items: "{{ tower_control_launched.instances }}"
+  tags: control
+
+- name: Provision Tower Application Nodes
+  ec2:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+    #key pair used in group_vars/all/main.yml
+    key_name: "{{ key_pair }}"
+    #image properties
+    #Suggested minimum sizing from https://docs.ansible.com/ansible-tower/latest/html/quickinstall/prepare.html
+    id: application1
+    instance_type: t2.medium
+    image: "{{ rhel_marketplace }}"
+    wait: true
+    group: "{{ tower_security_group }}"
+    count: 3
+    region: "{{ region }}"
+    assign_public_ip: yes
+    vpc_subnet_id: "{{ vpc_subnet_id }}"
+    #Explicitly define state
+    state: present    
+  register: tower_application_launched
+  tags: application
+
+- name: Add tower nodes to an in-memory inventory group
+  add_host:
+    name: "{{ item.public_dns_name }}"
+    groups: tower
+  with_items: "{{ tower_application_launched.instances }}"
+  tags: application
+
+- name: Provision Tower RDS Postgres Database
+  rds:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+    command: create
+    instance_name: postgres1
+    db_engine: postgres
+    size: 20
+    instance_type: db.t2.medium
+    wait: true
+    username: awx
+    password: "{{ postgres_password }}"
+    region: "{{ region }}"
+    #security_groups: "{{ rds_security_group }}"
+    tags:
+      Environment: test
+      Application: tower
+  register: tower_rds_launched
+  tags: rds
+
+- name: Add the rds node to an in-memory inventory group
+  add_host:
+    name: "{{ item.endpoint }}" 
+    groups: rds
+  with_items: 
+    - "{{ tower_rds_launched.instance }}"
+  tags: rds
+
+- name: Debug the returned control instance information from provisioning
+  debug:
+    msg: "{{ item }}"
+  with_items:
+    - "{{ tower_control_launched.instances }}"
+    - "{{ groups['control'] }}"
+  tags: control
+
+- name: Debug the returned application instance information from provisioning
+  debug:
+    msg: "{{ item }}" 
+  with_items:
+    - "{{ tower_application_launched.instances }}"
+    - "{{ groups['tower'] }}"
+  tags: application
+
+- name: Debug the rds endpoint
+  debug:
+    msg: "{{ item }}"
+  with_items:
+    - "{{ tower_rds_launched.instance }}"
+    - "{{ groups['rds'] }}"
+  tags: rds
+...

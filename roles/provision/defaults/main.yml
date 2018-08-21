@@ -1,0 +1,5 @@
+---
+#Red Hat Linux Marketplace image
+rhel_marketplace: ami-03291866
+#Geographical Region
+region: us-east-2
