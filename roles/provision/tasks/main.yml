@@ -18,7 +18,7 @@
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
-    id: controlzaaa
+    id: controlzaaaa2
     instance_type: t2.small
     image: "{{ rhel_marketplace }}"
     wait: yes
