@@ -21,10 +21,16 @@
     src: inventory.j2
     dest: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/inventory"
 
+- name: Copy over ansible.cfg to the install directory
+  copy:
+    src: ansible.cfg
+    dest: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/ansible.cfg"
+
 - name: Copy over the private key file
   copy:
     src: ~/.ssh/tower_rds
     dest: ~/.ssh/tower_rds
+    mode: 0400
 
 - name: Add some variables to group_vars/all
   lineinfile:
@@ -32,13 +38,12 @@
     line: "{{ item }}"
     create: yes
   with_items:
-    - "ansible_user: ec2-user"
+    - "ansible_user: centos"
     - "ansible_ssh_private_key_file: ~/.ssh/tower_rds"
 
 - name: Install Ansible
   yum:
-    name: ansible
+    name: ansible,vim,telnet
     state: latest
   become: yes
-  ignore_errors: yes
 ...

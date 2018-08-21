@@ -18,7 +18,7 @@
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
-    id: controlzaaaa2
+    id: controlCentos
     instance_type: t2.small
     image: "{{ rhel_marketplace }}"
     wait: yes
@@ -53,7 +53,7 @@
     key_name: "{{ key_pair }}"
     #image properties
     #Suggested minimum sizing from https://docs.ansible.com/ansible-tower/latest/html/quickinstall/prepare.html
-    id: application1
+    id: applicationCentos
     instance_type: t2.medium
     image: "{{ rhel_marketplace }}"
     wait: true
@@ -79,12 +79,16 @@
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
+    #image details
     command: create
-    instance_name: postgres1
+    instance_name: postgresCentos1
+    backup_retention: 0
+    db_name: awx
     db_engine: postgres
     size: 20
     instance_type: db.t2.medium
     wait: true
+    wait_timeout: 600
     username: awx
     password: "{{ postgres_password }}"
     region: "{{ region }}"

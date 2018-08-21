@@ -9,7 +9,7 @@
     - name: Wait for SSH to come up on the Control Node
       delegate_to: "{{ item }}"
       wait_for_connection:
-        delay: 60
+        delay: 10
         timeout: 320
       with_items: "{{ groups['control'] }}"
       tags: control    
