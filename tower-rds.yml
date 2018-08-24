@@ -2,6 +2,8 @@
 - name: Provision an Ansible Control Node, 3 Tower Servers, and an RDS Database
   hosts: localhost
   connection: local
+  #Gets the home directory for the stored private ssh key
+  gather_facts: yes
   roles:
     - { role: provision }
   
@@ -14,7 +16,15 @@
       with_items: "{{ groups['control'] }}"
       tags: control    
 
-- name: Boostrap the Control Node to administer the Tower installation
+- name: Boostrap the Control Node and administer the Tower installation
   hosts: control
+  #Gets the default remote_user for templated ansible.cfg
+  gather_facts: yes
   roles:
-    - { role: bootstrapControl }
+    - { role: install }
+
+  post_tasks:
+    - name: Browse to the returned public dns name of the first Tower Node
+      command: open "https://{{ groups['tower'][0] }}"
+      ignore_errors: true
+      delegate_to: localhost

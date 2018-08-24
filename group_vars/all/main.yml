@@ -1,8 +1,4 @@
 ---
+vpc_id: vpc-c4c7cda2
 vpc_subnet_id: subnet-9e6884b2
 key_pair: tower_rds
-
-#Right now these must be predefined in AWS
-control_security_group: Tower
-tower_security_group: Tower
-rds_security_group: Tower

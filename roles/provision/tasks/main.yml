@@ -6,9 +6,27 @@
     aws_secret_key: "{{ aws_secret_key }}"
     #key info 
     name: tower_rds
-    key_material: "{{ lookup('file', '~/.ssh/tower_rds.pub') }}"
+    key_material: "{{ lookup('file', private_ssh_key + '.pub') }}"
     region: "{{ region }}"
   register: key
+
+- name: Create the Control Node Security Group
+  ec2_group:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+    name: control
+    description: Security group for the Ansible Control Node
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        ports:
+          - 22
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow all on port 22
+  register: control_security
+  tags: control
 
 - name: Create the Linux Control Node
   ec2:
@@ -18,11 +36,12 @@
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
-    id: controlCentos
+    id: control{{ idempotent_id }}
     instance_type: t2.small
     image: "{{ rhel_marketplace }}"
     wait: yes
-    group: "{{ control_security_group }}"
+    group: control
+    #group: "{{ control_security_group }}"
     count: 1
     region: "{{ region }}"
     assign_public_ip: yes
@@ -30,19 +49,57 @@
     vpc_subnet_id: "{{ vpc_subnet_id }}"
     #Explicitly define state
     state: present
-    #user_data: |
-    #  #!/bin/bash
-    #  echo "{{ lookup('file', '~/.ssh/tower_rds.pub') }}" >/home/ec2-user/.ssh/authorized_keys
-    #  echo "{{ lookup('file', '~/.ssh/tower_rds.pub') }}" >/root/.ssh/authorized_keys
   register: tower_control_launched
   tags: control
 
-- name: Add the control node to an in-memory inventory group
+- name: Add the Control Node to an in-memory inventory group
   add_host:  
     name: "{{ item.public_dns_name }}" 
     groups: control
   with_items: "{{ tower_control_launched.instances }}"
   tags: control
+
+- name: Create the Tower Application Nodes Security Group
+  ec2_group:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}" 
+    aws_secret_key: "{{ aws_secret_key }}" 
+    name: application
+    description: Security group for the Tower Application Nodes
+    vpc_id: "{{ vpc_id }}" 
+    region: "{{ region }}" 
+    #Work in progress
+    rules:
+      - proto: tcp
+        ports:
+          - 80
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow http from everywhere
+      - proto: tcp
+        ports:
+          - 443
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow https on everywhere
+      #This should be locked down to the control security group
+      - proto: tcp
+        ports:
+          - 25672
+          - 4369
+          - 5672
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow rabbitmq from everywhere
+      - proto: tcp
+        ports:
+          - 22
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow ssh from everywhere
+      - proto: icmp
+        from_port: -1
+        to_port: -1
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow icmp from everywhere
+  register: application_security
+  tags: application
 
 - name: Provision Tower Application Nodes
   ec2:
@@ -52,12 +109,13 @@
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
+    id: application{{ idempotent_id }}
     #Suggested minimum sizing from https://docs.ansible.com/ansible-tower/latest/html/quickinstall/prepare.html
-    id: applicationCentos
     instance_type: t2.medium
     image: "{{ rhel_marketplace }}"
-    wait: true
-    group: "{{ tower_security_group }}"
+    wait: yes
+    group: application
+    #group: "{{ tower_security_group }}"
     count: 3
     region: "{{ region }}"
     assign_public_ip: yes
@@ -74,25 +132,44 @@
   with_items: "{{ tower_application_launched.instances }}"
   tags: application
 
-- name: Provision Tower RDS Postgres Database
+#- name: Create the RDS Node Security Group
+#  ec2_group:
+#    #authentication variables vaulted in group_vars/all/vault.yml
+#    aws_access_key: "{{ aws_access_key }}"
+#    aws_secret_key: "{{ aws_secret_key }}"
+#    name: rds
+#    description: Security group for the Ansible Control Node
+#    vpc_id: "{{ vpc_id }}"
+#    region: "{{ region }}"
+#    #This also needs to be locked down
+#    rules:
+#      - proto: all
+#        cidr_ip: 0.0.0.0/0
+#        rule_desc: allow all traffic
+#  register: rds_security
+#  tags: rds
+
+- name: Provision Tower RDS Postgres Database (this may take awhile)
   rds:
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
     #image details
     command: create
-    instance_name: postgresCentos1
+    instance_name: postgres{{ idempotent_id }}
     backup_retention: 0
     db_name: awx
     db_engine: postgres
     size: 20
     instance_type: db.t2.medium
-    wait: true
-    wait_timeout: 600
+    wait: yes
+    wait_timeout: 1000
     username: awx
     password: "{{ postgres_password }}"
     region: "{{ region }}"
-    #security_groups: "{{ rds_security_group }}"
+    #security_groups: rds
+    #security_groups: "{{ rds_security.group_id }}"
+    multi_zone: yes 
     tags:
       Environment: test
       Application: tower

@@ -3,3 +3,5 @@
 rhel_marketplace: ami-9887c6e7
 #Geographical Region
 region: us-east-1
+#Can be overridden for new infrastructure
+idempotent_id: rds

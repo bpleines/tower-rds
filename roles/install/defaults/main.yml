@@ -1,6 +1,6 @@
 ---
 #This value needs to be kept updated for the role to work
-tower_version: 3.2.5
+tower_version: 3.2.6
 install_dir: /home/centos
 
 #This value is derived from the above two values

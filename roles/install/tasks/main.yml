@@ -1,0 +1,121 @@
+---
+- name: Ensure the specified installation directory is present
+  file:
+    path: "{{ install_dir }}"
+    state: directory
+
+- name: Download Installer
+  get_url:
+    url: "https://releases.ansible.com/ansible-tower/setup/ansible-tower-setup-{{ tower_version }}.tar.gz"
+    dest: "{{ install_dir }}"
+  register: tar_download_info
+
+- name: Unarchive installer
+  unarchive:
+    src: "{{ tar_download_info.dest }}"
+    dest: "{{ install_dir }}"
+    remote_src: yes
+
+- name: Template the dynamically generated inventory file with RDS intact
+  template:
+    src: inventory.j2
+    dest: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/inventory"
+
+- name: Copy over ansible.cfg to the install directory
+  template:
+    src: ansible.cfg.j2
+    dest: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/ansible.cfg"
+
+- name: Copy over the private key file
+  copy:
+    src: "{{ hostvars['localhost']['private_ssh_key'] }}"
+    dest: "{{ private_ssh_key }}"
+    mode: 0400
+
+- name: Add some variables to group_vars/all
+  lineinfile:
+    path: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/group_vars/tower"
+    line: "{{ item }}"
+    create: yes
+  with_items:
+    - "ansible_user: {{ ansible_user_id }}"
+    - "ansible_ssh_private_key_file: {{ private_ssh_key }}"
+
+- name: Install Ansible
+  yum:
+    name: ansible
+    state: latest
+  become: yes
+
+- name: Check if Tower is already up
+  uri:
+    url: "http://localhost/api/v1/config/"
+    validate_certs: no
+    user: 'admin'
+    password: '{{ admin_password }}' 
+    force_basic_auth: yes 
+  register: tower_up
+  ignore_errors: yes
+  delegate_to: "{{ groups['tower'][0] }}"
+
+- block:
+    - name: Launch the Ansible Tower Installer
+      shell: ANSIBLE_SUDO=True ./setup.sh
+      args:
+        chdir: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/"
+    
+    - name: Verify Tower API is accepting connections (this will definitely take awhile)
+      uri:
+        url: "http://localhost/api/v1/config/"
+        validate_certs: no
+        user: 'admin'
+        password: '{{ admin_password }}'
+        force_basic_auth: yes
+      register: result
+      until: result['status']|default(0) == 200
+      retries: 15
+      delay: 10
+      delegate_to: "{{ groups['tower'][0] }}"
+  when: tower_up is failed
+  rescue:
+    - name: Report a failed Tower Installation
+      fail:
+        msg: "The Tower Installation failed. Please see {{ install_dir }}/ansible-tower-setup-{{ tower_version }}/setup.log for more information"
+
+- block:
+    - name: Land the tower license
+      copy:
+        src: license
+        dest: /etc/tower/
+        owner: awx 
+        group: awx 
+        mode: 0644
+      notify:
+        - restart ansible-tower-service
+    
+    #Got this from old docs but may require changes 
+    #- name: Land the custom console logo
+    #  copy:
+    #    src: logo
+    #    dest: /var/lib/awx/public/static/assets/custom_console_logo.png
+    #    owner: awx 
+    #    group: awx 
+    #    mode: 0755
+    #  notify:
+    #    - restart ansible-tower-service
+
+    #- name: Specify Tower to use the custom logo
+    #  copy:
+    #    content: "{{ custom_logo_yml|to_json }}"
+    #    dest: /var/lib/awx/public/static/local_settings.json
+    #    owner: awx
+    #    group: awx
+    #    mode: 0644
+    #    force: yes
+    #  vars:
+    #    custom_logo_yml:
+    #      custom_logo: true
+    #      custom_login_info: "Welcome to Ansible Tower backed by multi-az Amazon RDS"
+  delegate_to: "{{ groups['tower'][0] }}"
+  become: yes
+...
