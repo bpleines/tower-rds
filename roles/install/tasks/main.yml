@@ -59,23 +59,29 @@
   delegate_to: "{{ groups['tower'][0] }}"
 
 - block:
-    - name: Launch the Ansible Tower Installer
-      shell: ANSIBLE_SUDO=True ./setup.sh
+    - name: Asynchronously launch the Ansible Tower Installer
+      command: ./setup.sh
+      async: "{{ install_wait_time }}"
+      poll: 0
       args:
         chdir: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}/"
-    
-    - name: Verify Tower API is accepting connections (this will definitely take awhile)
+      environment:
+        ANSIBLE_BECOME: 'True'
+        ANSIBLE_BECOME_METHOD: 'sudo'
+        ANSIBLE_HOST_KEY_CHECKING: 'False'
+    - name: Poll the Tower API until it accepts connections (this will take awhile)
       uri:
-        url: "http://localhost/api/v1/config/"
+        url: "{{ 'http://localhost/api/v1/config/' | default('') }}"
         validate_certs: no
         user: 'admin'
         password: '{{ admin_password }}'
         force_basic_auth: yes
       register: result
       until: result['status']|default(0) == 200
-      retries: 15
-      delay: 10
+      retries: "{{ install_wait_time|int // 60 }}" 
+      delay: 60
       delegate_to: "{{ groups['tower'][0] }}"
+      ignore_errors: true
   when: tower_up is failed
   rescue:
     - name: Report a failed Tower Installation

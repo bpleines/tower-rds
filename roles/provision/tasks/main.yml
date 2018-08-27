@@ -4,21 +4,35 @@
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}" 
     aws_secret_key: "{{ aws_secret_key }}"
+    region: "{{ region }}"
     #key info 
     name: tower_rds
     key_material: "{{ lookup('file', private_ssh_key + '.pub') }}"
-    region: "{{ region }}"
   register: key
+
+- name: "Use ec2_ami_facts to find CentOS 7 AMI in {{ region }}" 
+  ec2_ami_facts:
+    #authentication variables vaulted in group_vars/all/vault.yml
+    aws_access_key: "{{ aws_access_key }}" 
+    aws_secret_key: "{{ aws_secret_key }}" 
+    region: "{{ region }}" 
+    filters:
+      name: "CentOS Linux 7 x86_64 HVM EBS ENA 1805_01-b7ee8a69-ee97-4a49-9e68-afaee216db2e-ami-77ec9308.4"
+  register: fetched_image
+
+- name: "Set the image_id"
+  set_fact:
+    linux_image: "{{ fetched_image.images[0]['image_id'] }}" 
 
 - name: Create the Control Node Security Group
   ec2_group:
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_id }}" 
     name: control
     description: Security group for the Ansible Control Node
-    vpc_id: "{{ vpc_id }}"
-    region: "{{ region }}"
     rules:
       - proto: tcp
         ports:
@@ -33,20 +47,19 @@
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
+    region: "{{ region }}"
+    #Must be defined when using assign_public_ip
+    vpc_subnet_id: "{{ vpc_subnet_id }}"
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
     id: control{{ idempotent_id }}
     instance_type: t2.small
-    image: "{{ rhel_marketplace }}"
+    image: "{{ linux_image }}"
     wait: yes
     group: control
-    #group: "{{ control_security_group }}"
     count: 1
-    region: "{{ region }}"
     assign_public_ip: yes
-    #Must be defined when using assign_public_ip
-    vpc_subnet_id: "{{ vpc_subnet_id }}"
     #Explicitly define state
     state: present
   register: tower_control_launched
@@ -64,10 +77,10 @@
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}" 
     aws_secret_key: "{{ aws_secret_key }}" 
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_id }}"
     name: application
     description: Security group for the Tower Application Nodes
-    vpc_id: "{{ vpc_id }}" 
-    region: "{{ region }}" 
     #Work in progress
     rules:
       - proto: tcp
@@ -106,20 +119,19 @@
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
+    region: "{{ region }}"
+    vpc_subnet_id: "{{ vpc_subnet_id }}"
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
     id: application{{ idempotent_id }}
     #Suggested minimum sizing from https://docs.ansible.com/ansible-tower/latest/html/quickinstall/prepare.html
     instance_type: t2.medium
-    image: "{{ rhel_marketplace }}"
+    image: "{{ linux_image }}"
     wait: yes
     group: application
-    #group: "{{ tower_security_group }}"
     count: 3
-    region: "{{ region }}"
     assign_public_ip: yes
-    vpc_subnet_id: "{{ vpc_subnet_id }}"
     #Explicitly define state
     state: present    
   register: tower_application_launched
@@ -154,6 +166,7 @@
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
+    region: "{{ region }}"
     #image details
     command: create
     instance_name: postgres{{ idempotent_id }}
@@ -162,16 +175,12 @@
     db_engine: postgres
     size: 20
     instance_type: db.t2.medium
-    wait: yes
-    wait_timeout: 1000
     username: awx
     password: "{{ postgres_password }}"
-    region: "{{ region }}"
-    #security_groups: rds
-    #security_groups: "{{ rds_security.group_id }}"
-    multi_zone: yes 
+    multi_zone: yes
+    wait: yes
+    wait_timeout: 1000
     tags:
-      Environment: test
       Application: tower
   register: tower_rds_launched
   tags: rds

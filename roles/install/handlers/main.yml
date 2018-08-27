@@ -1,4 +1,5 @@
-- name: Restart ansible-tower-service
+---
+- name: restart ansible-tower-service
   command: ansible-tower-service restart
   delegate_to: "{{ groups['tower'][0] }}"
   become: true

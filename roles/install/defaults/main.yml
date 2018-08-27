@@ -1,7 +1,10 @@
 ---
 #This value needs to be kept updated for the role to work
 tower_version: 3.2.6
-install_dir: /home/centos
+install_dir: "{{ ansible_env.HOME }}"
 
 #This value is derived from the above two values
 tower_install_dir: "{{ install_dir }}/ansible-tower-setup-{{ tower_version }}"
+
+#seconds
+install_wait_time: 1800

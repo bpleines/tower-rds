@@ -1,4 +1,7 @@
 ---
 vpc_id: vpc-c4c7cda2
 vpc_subnet_id: subnet-9e6884b2
+
+#Geographical Region
+region: us-east-1
 key_pair: tower_rds

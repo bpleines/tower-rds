@@ -1,3 +1,7 @@
 localhost connection=local
 
 [control]
+
+[tower]
+
+[rds]
