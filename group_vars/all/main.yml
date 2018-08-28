@@ -1,7 +1,9 @@
 ---
+#These values must be configured
 vpc_id: vpc-c4c7cda2
 vpc_subnet_id: subnet-9e6884b2
-
-#Geographical Region
 region: us-east-1
 key_pair: tower_rds
+
+#This is derived from above
+private_ssh_key: "{{ ansible_env.HOME }}/.ssh/{{ key_pair }}"
