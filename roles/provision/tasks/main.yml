@@ -7,8 +7,9 @@
     region: "{{ region }}"
     #key info 
     name: tower_rds
-    key_material: "{{ lookup('file', private_ssh_key + '.pub') }}"
+    key_material: "{{ lookup('file', private_ssh_key | replace('.pem','')  + '.pub') }}"
   register: key
+  tags: always
 
 - name: "Use ec2_ami_facts to find CentOS 7 AMI in {{ region }}" 
   ec2_ami_facts:
@@ -19,10 +20,12 @@
     filters:
       name: "CentOS Linux 7 x86_64 HVM EBS ENA 1805_01-b7ee8a69-ee97-4a49-9e68-afaee216db2e-ami-77ec9308.4"
   register: fetched_image
+  tags: always
 
 - name: "Set the image_id"
   set_fact:
-    linux_image: "{{ fetched_image.images[0]['image_id'] }}" 
+    linux_image: "{{ fetched_image.images[0]['image_id'] }}"
+  tags: always 
 
 - name: Create the Control Node Security Group
   ec2_group:
@@ -43,7 +46,7 @@
   tags: control
 
 - name: Create the Linux Control Node
-  ec2:
+  ec2_instance:
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
@@ -53,13 +56,15 @@
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
-    id: control{{ idempotent_id }}
+    name: control{{ idempotent_id }}
     instance_type: t2.small
-    image: "{{ linux_image }}"
+    image_id: "{{ linux_image }}"
     wait: yes
-    group: control
-    count: 1
-    assign_public_ip: yes
+    security_group: control
+    network:
+      assign_public_ip: yes
+    tags:
+      Name: control{{ idempotent_id }}
     #Explicitly define state
     state: present
   register: tower_control_launched
@@ -115,7 +120,7 @@
   tags: application
 
 - name: Provision Tower Application Nodes
-  ec2:
+  ec2_instance:
     #authentication variables vaulted in group_vars/all/vault.yml
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
@@ -124,24 +129,27 @@
     #key pair used in group_vars/all/main.yml
     key_name: "{{ key_pair }}"
     #image properties
-    id: application{{ idempotent_id }}
+    name: tower{{ item }}{{ idempotent_id }}
     #Suggested minimum sizing from https://docs.ansible.com/ansible-tower/latest/html/quickinstall/prepare.html
     instance_type: t2.medium
-    image: "{{ linux_image }}"
+    image_id: "{{ linux_image }}"
     wait: yes
-    group: application
-    count: 3
-    assign_public_ip: yes
+    security_group: application
+    network:
+      assign_public_ip: yes
+    tags:
+      Name: tower{{ item }}{{ idempotent_id }}
     #Explicitly define state
     state: present    
   register: tower_application_launched
+  with_items: [1, 2, 3]
   tags: application
 
 - name: Add tower nodes to an in-memory inventory group
   add_host:
-    name: "{{ item.public_dns_name }}"
+    name: "{{ tower_application_launched.results[item].instances[0].public_dns_name }}"
     groups: tower
-  with_items: "{{ tower_application_launched.instances }}"
+  with_items: [0, 1, 2]
   tags: application
 
 #- name: Create the RDS Node Security Group
@@ -169,7 +177,7 @@
     region: "{{ region }}"
     #image details
     command: create
-    instance_name: postgres{{ idempotent_id }}
+    instance_name: postgres
     backup_retention: 0
     db_name: awx
     db_engine: postgres
@@ -193,27 +201,18 @@
     - "{{ tower_rds_launched.instance }}"
   tags: rds
 
-- name: Debug the returned control instance information from provisioning
+- name: Debug the control instance public dns name
   debug:
-    msg: "{{ item }}"
-  with_items:
-    - "{{ tower_control_launched.instances }}"
-    - "{{ groups['control'] }}"
+    msg: "{{ groups['control'] }}"
   tags: control
 
-- name: Debug the returned application instance information from provisioning
+- name: Debug the tower application instance public dns name
   debug:
-    msg: "{{ item }}" 
-  with_items:
-    - "{{ tower_application_launched.instances }}"
-    - "{{ groups['tower'] }}"
+    msg: "{{ groups['tower'] }}"
   tags: application
 
-- name: Debug the rds endpoint
+- name: Debug the rds instance public dns name
   debug:
-    msg: "{{ item }}"
-  with_items:
-    - "{{ tower_rds_launched.instance }}"
-    - "{{ groups['rds'] }}"
+    msg: "{{ groups['rds'] }}"
   tags: rds
 ...

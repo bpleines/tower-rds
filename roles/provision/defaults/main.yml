@@ -1,3 +1,2 @@
----
-#Can be overridden for new infrastructure
-idempotent_id: rds
+#Can be overridden to create new Tower clusters
+idempotent_id: ""
