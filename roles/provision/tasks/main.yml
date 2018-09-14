@@ -11,15 +11,27 @@
   register: key
   tags: always
 
-- name: "Use ec2_ami_facts to find CentOS 7 AMI in {{ region }}" 
-  ec2_ami_facts:
-    #authentication variables vaulted in group_vars/all/vault.yml
-    aws_access_key: "{{ aws_access_key }}" 
-    aws_secret_key: "{{ aws_secret_key }}" 
-    region: "{{ region }}" 
-    filters:
-      name: "CentOS Linux 7 x86_64 HVM EBS ENA 1805_01-b7ee8a69-ee97-4a49-9e68-afaee216db2e-ami-77ec9308.4"
-  register: fetched_image
+- block: 
+    - name: "Try to use ec2_ami_facts to find private RHEL 7.4 Golden AMI in {{ region }}" 
+      ec2_ami_facts:
+        #authentication variables vaulted in group_vars/all/vault.yml
+        aws_access_key: "{{ aws_access_key }}" 
+        aws_secret_key: "{{ aws_secret_key }}" 
+        region: "{{ region }}" 
+        filters:
+          name: "RHEL-7.4_HVM-20180103-x86_64-2-Access2-GP2"
+      register: fetched_image
+      ignore_errors: yes
+  rescue:
+    - name: "Use ec2_ami_facts to find marketplace CentOS 7 AMI in {{ region }}" 
+      ec2_ami_facts:
+        #authentication variables vaulted in group_vars/all/vault.yml
+        aws_access_key: "{{ aws_access_key }}" 
+        aws_secret_key: "{{ aws_secret_key }}" 
+        region: "{{ region }}" 
+        filters:
+          name: "CentOS Linux 7 x86_64 HVM EBS ENA 1805_01-b7ee8a69-ee97-4a49-9e68-afaee216db2e-ami-77ec9308.4"
+      register: fetched_image
   tags: always
 
 - name: "Set the image_id"
@@ -177,7 +189,7 @@
     region: "{{ region }}"
     #image details
     command: create
-    instance_name: postgres
+    instance_name: postgres{{ idempotent_id }}
     backup_retention: 0
     db_name: awx
     db_engine: postgres

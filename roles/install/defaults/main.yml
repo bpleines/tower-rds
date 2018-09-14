@@ -1,6 +1,6 @@
 ---
 #This value needs to be kept updated for the role to work
-tower_version: 3.2.6
+tower_version: 3.3.0-1
 install_dir: "{{ ansible_env.HOME }}"
 
 #This value is derived from the above two values

@@ -45,7 +45,22 @@
   yum:
     name: ansible
     state: latest
-  become: yes
+  become: yes 
+  register: ansible_install
+  ignore_errors: yes
+
+- block:
+    #Required on RHEL golden image
+    - name: Enable the extras repo if necessary
+      command: yum-config-manager --enable 'rhui-REGION-rhel-server-extras'
+      become: yes
+
+    - name: Install Ansible
+      yum:
+        name: ansible
+        state: latest
+      become: yes
+  when: ansible_install is failed
 
 - name: Check if Tower is already up
   uri:
@@ -69,6 +84,7 @@
         ANSIBLE_BECOME: 'True'
         ANSIBLE_BECOME_METHOD: 'sudo'
         ANSIBLE_HOST_KEY_CHECKING: 'False'
+
     - name: Poll the Tower API until it accepts connections (this will take awhile)
       uri:
         url: "{{ 'http://localhost/api/v1/config/' | default('') }}"
@@ -99,29 +115,27 @@
       notify:
         - restart ansible-tower-service
     
-    #Got this from old docs but may require changes 
-    #- name: Land the custom console logo
-    #  copy:
-    #    src: logo
-    #    dest: /var/lib/awx/public/static/assets/custom_console_logo.png
-    #    owner: awx 
-    #    group: awx 
-    #    mode: 0755
-    #  notify:
-    #    - restart ansible-tower-service
+    - name: Land the custom console logo
+      copy:
+        src: logo
+        dest: /var/lib/awx/public/static/assets/custom_console_logo.png
+        owner: root 
+        group: root
+      notify:
+        - restart ansible-tower-service
 
-    #- name: Specify Tower to use the custom logo
-    #  copy:
-    #    content: "{{ custom_logo_yml|to_json }}"
-    #    dest: /var/lib/awx/public/static/local_settings.json
-    #    owner: awx
-    #    group: awx
-    #    mode: 0644
-    #    force: yes
-    #  vars:
-    #    custom_logo_yml:
-    #      custom_logo: true
-    #      custom_login_info: "Welcome to Ansible Tower backed by multi-az Amazon RDS"
+    - name: Specify Tower to use the custom logo
+      copy:
+        content: "{{ custom_logo_yml|to_json }}"
+        dest: /var/lib/awx/public/static/local_settings.json
+        owner: root
+        group: root
+        force: yes
+      vars:
+        custom_logo_yml:
+          custom_logo: true
+          custom_login_info: "Welcome to Ansible Tower backed by multi-az Amazon RDS"
+  when: customize_for_practice is undefined
   delegate_to: "{{ groups['tower'][0] }}"
   become: yes
 ...
